@@ -97,6 +97,7 @@ BACKUP_DATE=$(date +"%Y-%m-%d_%H-%M-%S")
 ARCHIVE_NAME="clawd_memory_backup_${BACKUP_DATE}.tar.gz"
 FULL_ARCHIVE_PATH="$LOCAL_BACKUP_DIR/$ARCHIVE_NAME"
 TEMP_DIR=$(mktemp -d)
+trap 'rm -rf "$TEMP_DIR"' EXIT
 STAGING_DIR="$TEMP_DIR/clawd_backup_$BACKUP_DATE"
 
 log_message "Preparing backup staging area..."
@@ -116,7 +117,7 @@ fi
 
 if [ -d "$PROJECT_DIR/scripts" ]; then
   mkdir -p "$STAGING_DIR/clawd_scripts"
-  cp -R "$PROJECT_DIR/scripts"/* "$STAGING_DIR/clawd_scripts/" 2>/dev/null
+  cp -R "$PROJECT_DIR/scripts"/* "$STAGING_DIR/clawd_scripts/" 2>/dev/null || true
   log_message "Staged clawd/scripts."
 fi
 
@@ -139,7 +140,7 @@ if [ -d "$CURSORAPPS_CLAWD" ]; then
   if command -v rsync >/dev/null 2>&1; then
     rsync -a --exclude='node_modules' --exclude='test-results' --exclude='.last-run.json' "$CURSORAPPS_CLAWD/" "$CLAWD_STAGE/"
   else
-    cp -R "$CURSORAPPS_CLAWD"/* "$CLAWD_STAGE/" 2>/dev/null
+    cp -R "$CURSORAPPS_CLAWD"/* "$CLAWD_STAGE/" 2>/dev/null || true
     rm -rf "$CLAWD_STAGE/node_modules" "$CLAWD_STAGE/test-results" 2>/dev/null
   fi
   log_message "Staged Dev/CursorApps/clawd."
@@ -147,11 +148,14 @@ fi
 
 log_message "Creating backup archive '$FULL_ARCHIVE_PATH'..."
 tar -czf "$FULL_ARCHIVE_PATH" -C "$TEMP_DIR" "clawd_backup_$BACKUP_DATE"
-rm -rf "$TEMP_DIR"
 log_message "Backup archive created successfully."
 
 log_message "Starting rclone transfer to Google Drive..."
-rclone copy "$FULL_ARCHIVE_PATH" "$RCLONE_REMOTE$GDRIVE_DEST_DIR" --progress
+if [ -t 1 ]; then
+  rclone copy "$FULL_ARCHIVE_PATH" "$RCLONE_REMOTE$GDRIVE_DEST_DIR" --progress
+else
+  rclone copy "$FULL_ARCHIVE_PATH" "$RCLONE_REMOTE$GDRIVE_DEST_DIR" --stats-one-line --stats 10s
+fi
 log_message "Backup successfully transferred to Google Drive."
 
 log_message "Applying retention policy ($RETENTION_DAYS days)..."

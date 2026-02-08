@@ -25,8 +25,6 @@ search_plist_paths=(
   "$HOME/Dev/clawd/scripts/$PLIST_NAME"
   "$HOME/Projects/clawd/scripts/$PLIST_NAME"
   "$HOME/Dev/ClawBackup/scripts/$PLIST_NAME"
-  "./scripts/$PLIST_NAME"
-  "./$PLIST_NAME"
   "$(pwd)/scripts/$PLIST_NAME"
   "$(pwd)/$PLIST_NAME"
 )
