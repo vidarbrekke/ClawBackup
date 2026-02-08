@@ -23,6 +23,7 @@ fi
 search_plist_paths=(
   "$HOME/clawd/scripts/$PLIST_NAME"
   "$HOME/Dev/clawd/scripts/$PLIST_NAME"
+  "$HOME/Projects/clawd/scripts/$PLIST_NAME"
   "$HOME/Dev/ClawBackup/scripts/$PLIST_NAME"
   "./scripts/$PLIST_NAME"
   "./$PLIST_NAME"

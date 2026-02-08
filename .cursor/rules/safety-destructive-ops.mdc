@@ -1,0 +1,22 @@
+---
+description: Guard clauses and edge cases for destructive or remote operations
+alwaysApply: true
+---
+
+# Safety for destructive and remote operations
+
+When writing or generating code that deletes, overwrites, or modifies remote or system-wide data:
+
+1. **Guard against empty or root paths**  
+   Before running delete/purge/rm on remote or local paths, check that variables are non-empty and that destination is not `/` or the root of a drive. Example: `if [ -n "$VAR" ] && [ "$VAR" != "/" ]; then ... fi`
+
+2. **Cross-environment path assumptions**  
+   If generated scripts or configs use paths (e.g. from `os.homedir()` or user input), consider where the script will run: WSL vs Windows (different home paths), root vs user (LaunchDaemon vs LaunchAgent). Document in README when setup must be run in a specific environment (e.g. "Run setup inside WSL if the script will run in WSL").
+
+3. **Clarify sudo/password prompts in docs**  
+   If a script sometimes needs elevated permissions (e.g. to remove an old system daemon), say so explicitly so users are not surprised by a password prompt.
+
+4. **Explicit over implicit for search paths**  
+   When a script searches for a file in a list of paths, include one or two common alternate locations (e.g. `~/Projects/...`) and document that users can pass an explicit path. Prefer explicit paths over slow or broad `find` when possible.
+
+Apply these checks before finalizing code that touches remote storage, cron/launchd, or system paths.

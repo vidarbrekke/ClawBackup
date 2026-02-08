@@ -159,7 +159,11 @@ find "$LOCAL_BACKUP_DIR" -maxdepth 1 -type f -name 'clawd_memory_backup_*.tar.gz
   log_message "Deleted old local backup: '$old_backup'."
 done
 log_message "Cleaning up remote backups older than $RETENTION_DAYS days..."
-rclone delete --min-age ${RETENTION_DAYS}d "$RCLONE_REMOTE$GDRIVE_DEST_DIR" 2>/dev/null || true
+if [ -n "$RCLONE_REMOTE" ] && [ -n "$GDRIVE_DEST_DIR" ] && [ "$GDRIVE_DEST_DIR" != "/" ]; then
+  rclone delete --min-age ${RETENTION_DAYS}d "$RCLONE_REMOTE$GDRIVE_DEST_DIR" 2>/dev/null || true
+else
+  log_message "Skipping remote cleanup: remote or dest not set or dest is root."
+fi
 
 log_message "Backup process completed successfully."
 exit 0

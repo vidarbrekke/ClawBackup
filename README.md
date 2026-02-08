@@ -13,7 +13,7 @@ Backs up your OpenClaw customizations (memory, config, skills, workspace) to Goo
 
 - **Node.js** — [Download](https://nodejs.org/) (for running setup)
 - **rclone** — [Download](https://rclone.org/install/) and configured for Google Drive
-- **Bash** — included on macOS/Linux; use Git Bash on Windows
+- **Bash** — included on macOS/Linux; use Git Bash on Windows. **If you use WSL**, run setup inside your WSL terminal (e.g. `node setup.js` from WSL), not from Windows PowerShell, so paths are generated for Linux.
 
 ## Install (choose one)
 
@@ -56,7 +56,7 @@ node setup.js
 
 ## Schedule (optional)
 
-- **macOS:** The setup generates a LaunchAgent plist. Install with the printed commands (copy to `~/Library/LaunchAgents/` and `launchctl load` — no sudo). Or run the universal installer from the ClawBackup repo: `./install-launchagent.sh` (it finds the plist, removes an old LaunchDaemon if present, and installs/loads the LaunchAgent). Backups run daily at 11:00 under your user so rclone uses your config.
+- **macOS:** The setup generates a LaunchAgent plist. Install with the printed commands (copy to `~/Library/LaunchAgents/` and `launchctl load` — no sudo for the agent). Or run the universal installer: `./install-launchagent.sh` (it searches common locations; if your project is elsewhere, pass the plist path: `./install-launchagent.sh /path/to/com.openclaw.backup.plist`). If you had an old system-wide daemon, the installer may ask for your password once to remove it. Backups run daily at 11:00 under your user so rclone uses your config.
 - **Linux:** Add the printed cron line to `crontab -e`.
 - **Windows:** Use Task Scheduler to run the backup script daily via Git Bash or WSL.
 
@@ -65,6 +65,10 @@ node setup.js
 - **Backup fails or rclone “remote not found”:** Run `rclone config` and ensure the remote name matches what you entered at setup (e.g. `googleDrive`). On macOS, use the LaunchAgent (not LaunchDaemon) so the job runs as your user and sees `~/.config/rclone`.
 - **Paths wrong after moving home/project:** Run `node setup.js` again with the new paths, then reinstall the scheduler (e.g. `./install-launchagent.sh` on macOS).
 - **Check logs:** Local backup log: `$LOCAL_BACKUP_DIR/backup.log`; launchd stdout/stderr: `$LOCAL_BACKUP_DIR/launchd.log` and `launchd.err` (paths from your setup).
+
+## For maintainers / AI-assisted edits
+
+To reduce oversights when editing this repo (e.g. destructive ops, path edge cases), this repo includes a Cursor rule: [.cursor/rules/safety-destructive-ops.mdc](.cursor/rules/safety-destructive-ops.mdc). You can copy that file into your OpenClaw or clawd project’s `.cursor/rules/` so the same checks apply there.
 
 ## License
 
