@@ -21,11 +21,27 @@ const defaults = {
   schedule: os.platform() === "darwin" ? "launchd" : "cron"
 };
 
+/** Resolve to absolute path; expand leading ~ to homedir so cron/launchd work from any CWD. */
+function resolveDir(p) {
+  if (typeof p !== "string" || !p.trim()) return p;
+  const expanded = p.trim().replace(/^~(?=\/|$)/, home);
+  return path.resolve(expanded);
+}
+
 /** Paths in generated Bash script must use forward slashes (Windows compatibility). */
 const toPosix = (p) => (typeof p === "string" ? p.split(path.sep).join(path.posix.sep) : p);
 
 /** Escape double quotes so injected values don't break Bash variable syntax. */
-const escapeBash = (s) => (typeof s === "string" ? s.replace(/\\/g, "\\\\").replace(/"/g, '\\"') : s);
+const escapeBash = (s) => (typeof s === "string" ? s.replace(/\\/g, "\\\\").replace(/"/g, '\\"') : String(s ?? ""));
+
+/** Escape for XML plist string content. */
+const escapePlist = (s) =>
+  String(s ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
 
 /** Warn if path does not exist; return path unchanged. */
 function validatePath(label, p) {
@@ -50,21 +66,22 @@ function writeScriptWithBackup(scriptPath, content) {
 }
 
 function buildBackupScript(cfg) {
-  const p = (key) => escapeBash(toPosix(cfg[key]));
-  const s = (key) => escapeBash(cfg[key]);
-  const retention = String(cfg.retentionDays || "7").replace(/[^0-9]/g, "") || "7";
+  const raw = (key, fallback) => (cfg[key] != null && String(cfg[key]).trim() !== "" ? cfg[key] : fallback);
+  const p = (key, fallback) => escapeBash(toPosix(raw(key, fallback) ?? ""));
+  const s = (key, fallback) => escapeBash(raw(key, fallback) ?? "");
+  const retention = String(raw("retentionDays", "7")).replace(/[^0-9]/g, "") || "7";
   return `#!/bin/bash
 set -e
 
-PROJECT_DIR="${p("projectDir")}"
+PROJECT_DIR="${p("projectDir", defaults.projectDir)}"
 SOURCE_DIR="$PROJECT_DIR/memory"
-OPENCLAW_DIR="${p("openclawDir")}"
-CURSORAPPS_CLAWD="${p("cursorappsClawd")}"
-LOCAL_BACKUP_DIR="${p("localBackupDir")}"
+OPENCLAW_DIR="${p("openclawDir", defaults.openclawDir)}"
+CURSORAPPS_CLAWD="${p("cursorappsClawd", defaults.cursorappsClawd)}"
+LOCAL_BACKUP_DIR="${p("localBackupDir", defaults.localBackupDir)}"
 LOG_FILE="$LOCAL_BACKUP_DIR/backup.log"
 RETENTION_DAYS=${retention}
-RCLONE_REMOTE="${s("gdriveRemote")}"
-GDRIVE_DEST_DIR="${s("gdriveDest")}"
+RCLONE_REMOTE="${s("gdriveRemote", defaults.gdriveRemote)}"
+GDRIVE_DEST_DIR="${s("gdriveDest", defaults.gdriveDest)}"
 
 log_message() {
   local message="$1"
@@ -150,9 +167,9 @@ exit 0
 }
 
 function buildLaunchdPlist(scriptPath, localBackupDir) {
-  const logPath = toPosix(path.join(localBackupDir, "launchd.log"));
-  const errPath = toPosix(path.join(localBackupDir, "launchd.err"));
-  const scriptPathPosix = toPosix(scriptPath);
+  const logPath = escapePlist(toPosix(path.join(localBackupDir, "launchd.log")));
+  const errPath = escapePlist(toPosix(path.join(localBackupDir, "launchd.err")));
+  const scriptPathPosix = escapePlist(toPosix(scriptPath));
   return `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -179,12 +196,19 @@ function buildLaunchdPlist(scriptPath, localBackupDir) {
 `;
 }
 
+function normalizeSchedule(input) {
+  const v = (input || "").trim().toLowerCase();
+  if (v === "launchd" || v === "cron" || v === "none") return v;
+  if ((input || "").trim() !== "") console.warn(`Unknown schedule "${input}"; using "${defaults.schedule}".`);
+  return defaults.schedule;
+}
+
 async function main() {
   console.log("ClawBackup Setup (interactive)\n");
-  const projectDir = (await ask(`Project dir [${defaults.projectDir}]: `)).trim() || defaults.projectDir;
-  const openclawDir = (await ask(`~/.openclaw dir [${defaults.openclawDir}]: `)).trim() || defaults.openclawDir;
-  const cursorappsClawd = (await ask(`Dev/CursorApps/clawd dir [${defaults.cursorappsClawd}]: `)).trim() || defaults.cursorappsClawd;
-  const localBackupDir = (await ask(`Local backup dir [${defaults.localBackupDir}]: `)).trim() || defaults.localBackupDir;
+  const projectDir = resolveDir((await ask(`Project dir [${defaults.projectDir}]: `)).trim() || defaults.projectDir);
+  const openclawDir = resolveDir((await ask(`~/.openclaw dir [${defaults.openclawDir}]: `)).trim() || defaults.openclawDir);
+  const cursorappsClawd = resolveDir((await ask(`Dev/CursorApps/clawd dir [${defaults.cursorappsClawd}]: `)).trim() || defaults.cursorappsClawd);
+  const localBackupDir = resolveDir((await ask(`Local backup dir [${defaults.localBackupDir}]: `)).trim() || defaults.localBackupDir);
   validatePath("Project dir", projectDir);
   validatePath("~/.openclaw dir", openclawDir);
   validatePath("Dev/CursorApps/clawd dir", cursorappsClawd);
@@ -192,7 +216,8 @@ async function main() {
   const gdriveRemote = (await ask(`rclone remote [${defaults.gdriveRemote}]: `)).trim() || defaults.gdriveRemote;
   const gdriveDest = (await ask(`GDrive dest path [${defaults.gdriveDest}]: `)).trim() || defaults.gdriveDest;
   const retentionDays = (await ask(`Retention days [${defaults.retentionDays}]: `)).trim() || defaults.retentionDays;
-  const schedule = (await ask(`Schedule (launchd|cron|none) [${defaults.schedule}]: `)).trim() || defaults.schedule;
+  const scheduleInput = (await ask(`Schedule (launchd|cron|none) [${defaults.schedule}]: `)).trim() || defaults.schedule;
+  const schedule = normalizeSchedule(scheduleInput);
 
   const cfg = { projectDir, openclawDir, cursorappsClawd, localBackupDir, gdriveRemote, gdriveDest, retentionDays };
   const scriptsDir = path.join(projectDir, "scripts");

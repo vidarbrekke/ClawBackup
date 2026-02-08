@@ -36,8 +36,8 @@ node setup.js
 ## Run setup
 
 1. Run the setup (using Option A or B above).
-2. Answer the prompts. Press Enter to accept the default in brackets.
-3. The setup writes a customized `backup_enhanced.sh` into your project’s `scripts/` folder.
+2. Answer the prompts. Press Enter to accept the default in brackets. All paths use your system’s home directory and what you type — nothing is hardcoded to a specific username.
+3. The setup writes a customized `backup_enhanced.sh` into your project’s `scripts/` folder (paths are resolved to absolute so cron/launchd work from any working directory).
 4. If you chose `launchd` (macOS) or `cron` (Linux), follow the printed commands to enable scheduled backups.
 
 ## Before first backup
@@ -56,9 +56,15 @@ node setup.js
 
 ## Schedule (optional)
 
-- **macOS:** The setup generates a LaunchAgent plist. Install with the printed commands (copy to `~/Library/LaunchAgents/` and `launchctl load` — no sudo). Backups run daily at 11:00 under your user so rclone uses your config.
+- **macOS:** The setup generates a LaunchAgent plist. Install with the printed commands (copy to `~/Library/LaunchAgents/` and `launchctl load` — no sudo). Or run the universal installer from the ClawBackup repo: `./install-launchagent.sh` (it finds the plist, removes an old LaunchDaemon if present, and installs/loads the LaunchAgent). Backups run daily at 11:00 under your user so rclone uses your config.
 - **Linux:** Add the printed cron line to `crontab -e`.
 - **Windows:** Use Task Scheduler to run the backup script daily via Git Bash or WSL.
+
+## Troubleshooting
+
+- **Backup fails or rclone “remote not found”:** Run `rclone config` and ensure the remote name matches what you entered at setup (e.g. `googleDrive`). On macOS, use the LaunchAgent (not LaunchDaemon) so the job runs as your user and sees `~/.config/rclone`.
+- **Paths wrong after moving home/project:** Run `node setup.js` again with the new paths, then reinstall the scheduler (e.g. `./install-launchagent.sh` on macOS).
+- **Check logs:** Local backup log: `$LOCAL_BACKUP_DIR/backup.log`; launchd stdout/stderr: `$LOCAL_BACKUP_DIR/launchd.log` and `launchd.err` (paths from your setup).
 
 ## License
 
