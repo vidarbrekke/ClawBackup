@@ -6,7 +6,7 @@ Backs up your OpenClaw customizations (memory, config, skills, workspace) to Goo
 
 - **Clawd memory** — your project memory folder
 - **OpenClaw config** — `openclaw.json`, skills, modules, workspace, cron jobs
-- **Clawd scripts** — backup script, LaunchDaemon installer
+- **Clawd scripts** — backup script, LaunchAgent plist (macOS)
 - **CursorApps/clawd** — skills source, session proxy, docs (excluding `node_modules`)
 
 ## Prerequisites
@@ -56,7 +56,7 @@ node setup.js
 
 ## Schedule (optional)
 
-- **macOS:** The setup generates a launchd plist. Install with the printed `sudo cp ...` and `sudo launchctl load ...` commands. Backups run daily at 11:00.
+- **macOS:** The setup generates a LaunchAgent plist. Install with the printed commands (copy to `~/Library/LaunchAgents/` and `launchctl load` — no sudo). Backups run daily at 11:00 under your user so rclone uses your config.
 - **Linux:** Add the printed cron line to `crontab -e`.
 - **Windows:** Use Task Scheduler to run the backup script daily via Git Bash or WSL.
 

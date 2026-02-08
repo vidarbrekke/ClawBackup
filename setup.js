@@ -21,24 +21,50 @@ const defaults = {
   schedule: os.platform() === "darwin" ? "launchd" : "cron"
 };
 
+/** Paths in generated Bash script must use forward slashes (Windows compatibility). */
+const toPosix = (p) => (typeof p === "string" ? p.split(path.sep).join(path.posix.sep) : p);
+
+/** Escape double quotes so injected values don't break Bash variable syntax. */
+const escapeBash = (s) => (typeof s === "string" ? s.replace(/\\/g, "\\\\").replace(/"/g, '\\"') : s);
+
+/** Warn if path does not exist; return path unchanged. */
+function validatePath(label, p) {
+  if (p && !fs.existsSync(p)) {
+    console.warn(`Warning: "${label}" does not exist: ${p}`);
+  }
+  return p;
+}
+
 function safeWrite(filePath, content) {
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
   fs.writeFileSync(filePath, content, "utf8");
 }
 
+function writeScriptWithBackup(scriptPath, content) {
+  if (fs.existsSync(scriptPath)) {
+    const bak = scriptPath + ".bak";
+    fs.renameSync(scriptPath, bak);
+    console.warn(`Existing script backed up to: ${bak}`);
+  }
+  safeWrite(scriptPath, content);
+}
+
 function buildBackupScript(cfg) {
+  const p = (key) => escapeBash(toPosix(cfg[key]));
+  const s = (key) => escapeBash(cfg[key]);
+  const retention = String(cfg.retentionDays || "7").replace(/[^0-9]/g, "") || "7";
   return `#!/bin/bash
 set -e
 
-PROJECT_DIR="${cfg.projectDir}"
+PROJECT_DIR="${p("projectDir")}"
 SOURCE_DIR="$PROJECT_DIR/memory"
-OPENCLAW_DIR="${cfg.openclawDir}"
-CURSORAPPS_CLAWD="${cfg.cursorappsClawd}"
-LOCAL_BACKUP_DIR="${cfg.localBackupDir}"
+OPENCLAW_DIR="${p("openclawDir")}"
+CURSORAPPS_CLAWD="${p("cursorappsClawd")}"
+LOCAL_BACKUP_DIR="${p("localBackupDir")}"
 LOG_FILE="$LOCAL_BACKUP_DIR/backup.log"
-RETENTION_DAYS=${cfg.retentionDays}
-RCLONE_REMOTE="${cfg.gdriveRemote}"
-GDRIVE_DEST_DIR="${cfg.gdriveDest}"
+RETENTION_DAYS=${retention}
+RCLONE_REMOTE="${s("gdriveRemote")}"
+GDRIVE_DEST_DIR="${s("gdriveDest")}"
 
 log_message() {
   local message="$1"
@@ -113,8 +139,10 @@ log_message "Backup successfully transferred to Google Drive."
 
 log_message "Applying retention policy ($RETENTION_DAYS days)..."
 find "$LOCAL_BACKUP_DIR" -maxdepth 1 -type f -name 'clawd_memory_backup_*.tar.gz' -mtime +"$RETENTION_DAYS" -print -delete | while read -r old_backup; do
-  log_message "Deleted old backup: '$old_backup'."
+  log_message "Deleted old local backup: '$old_backup'."
 done
+log_message "Cleaning up remote backups older than $RETENTION_DAYS days..."
+rclone delete --min-age ${RETENTION_DAYS}d "$RCLONE_REMOTE$GDRIVE_DEST_DIR" 2>/dev/null || true
 
 log_message "Backup process completed successfully."
 exit 0
@@ -122,8 +150,9 @@ exit 0
 }
 
 function buildLaunchdPlist(scriptPath, localBackupDir) {
-  const logPath = path.join(localBackupDir, "launchd.log").replace(/\\/g, "/");
-  const errPath = path.join(localBackupDir, "launchd.err").replace(/\\/g, "/");
+  const logPath = toPosix(path.join(localBackupDir, "launchd.log"));
+  const errPath = toPosix(path.join(localBackupDir, "launchd.err"));
+  const scriptPathPosix = toPosix(scriptPath);
   return `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -132,7 +161,7 @@ function buildLaunchdPlist(scriptPath, localBackupDir) {
     <string>com.openclaw.backup</string>
     <key>ProgramArguments</key>
     <array>
-      <string>${scriptPath}</string>
+      <string>${scriptPathPosix}</string>
     </array>
     <key>StartCalendarInterval</key>
     <dict>
@@ -156,6 +185,10 @@ async function main() {
   const openclawDir = (await ask(`~/.openclaw dir [${defaults.openclawDir}]: `)).trim() || defaults.openclawDir;
   const cursorappsClawd = (await ask(`Dev/CursorApps/clawd dir [${defaults.cursorappsClawd}]: `)).trim() || defaults.cursorappsClawd;
   const localBackupDir = (await ask(`Local backup dir [${defaults.localBackupDir}]: `)).trim() || defaults.localBackupDir;
+  validatePath("Project dir", projectDir);
+  validatePath("~/.openclaw dir", openclawDir);
+  validatePath("Dev/CursorApps/clawd dir", cursorappsClawd);
+  validatePath("Local backup dir", localBackupDir);
   const gdriveRemote = (await ask(`rclone remote [${defaults.gdriveRemote}]: `)).trim() || defaults.gdriveRemote;
   const gdriveDest = (await ask(`GDrive dest path [${defaults.gdriveDest}]: `)).trim() || defaults.gdriveDest;
   const retentionDays = (await ask(`Retention days [${defaults.retentionDays}]: `)).trim() || defaults.retentionDays;
@@ -164,17 +197,19 @@ async function main() {
   const cfg = { projectDir, openclawDir, cursorappsClawd, localBackupDir, gdriveRemote, gdriveDest, retentionDays };
   const scriptsDir = path.join(projectDir, "scripts");
   const scriptPath = path.join(scriptsDir, "backup_enhanced.sh");
-  safeWrite(scriptPath, buildBackupScript(cfg));
+  writeScriptWithBackup(scriptPath, buildBackupScript(cfg));
   fs.chmodSync(scriptPath, 0o755);
   console.log(`\nBackup script written to: ${scriptPath}`);
 
   if (schedule === "launchd" && os.platform() === "darwin") {
     const plistPath = path.join(scriptsDir, "com.openclaw.backup.plist");
+    const launchAgentsDir = path.join(home, "Library", "LaunchAgents");
     safeWrite(plistPath, buildLaunchdPlist(scriptPath, localBackupDir));
     console.log(`Launchd plist written to: ${plistPath}`);
-    console.log(`\nInstall the scheduler with:`);
-    console.log(`  sudo cp "${plistPath}" /Library/LaunchDaemons/com.openclaw.backup.plist`);
-    console.log(`  sudo launchctl load /Library/LaunchDaemons/com.openclaw.backup.plist`);
+    console.log(`\nInstall the scheduler (run as your user, do not use sudo):`);
+    console.log(`  mkdir -p "${launchAgentsDir}"`);
+    console.log(`  cp "${plistPath}" "${path.join(launchAgentsDir, "com.openclaw.backup.plist")}"`);
+    console.log(`  launchctl load "${path.join(launchAgentsDir, "com.openclaw.backup.plist")}"`);
   } else if (schedule === "cron") {
     console.log(`\nAdd this line to crontab (crontab -e):`);
     console.log(`  0 11 * * * ${scriptPath}`);
