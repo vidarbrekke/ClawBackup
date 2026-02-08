@@ -40,6 +40,8 @@ node setup.js
 3. The setup writes a customized `backup_enhanced.sh` into your project’s `scripts/` folder (paths are resolved to absolute so cron/launchd work from any working directory).
 4. If you chose `launchd` (macOS) or `cron` (Linux), follow the printed commands to enable scheduled backups.
 
+To regenerate the backup script and plist with default paths only (no prompts), run `node setup.js --defaults`.
+
 ## Before first backup
 
 1. **Configure rclone for Google Drive:**

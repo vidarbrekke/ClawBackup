@@ -94,7 +94,7 @@ if [ ! -d "$LOCAL_BACKUP_DIR" ]; then
 fi
 
 BACKUP_DATE=$(date +"%Y-%m-%d_%H-%M-%S")
-ARCHIVE_NAME="clawd_memory_backup_${BACKUP_DATE}.tar.gz"
+ARCHIVE_NAME="clawd_memory_backup_\${BACKUP_DATE}.tar.gz"
 FULL_ARCHIVE_PATH="$LOCAL_BACKUP_DIR/$ARCHIVE_NAME"
 TEMP_DIR=$(mktemp -d)
 trap 'rm -rf "$TEMP_DIR"' EXIT
@@ -164,7 +164,7 @@ find "$LOCAL_BACKUP_DIR" -maxdepth 1 -type f -name 'clawd_memory_backup_*.tar.gz
 done
 log_message "Cleaning up remote backups older than $RETENTION_DAYS days..."
 if [ -n "$RCLONE_REMOTE" ] && [ -n "$GDRIVE_DEST_DIR" ] && [ "$GDRIVE_DEST_DIR" != "/" ]; then
-  rclone delete --min-age ${RETENTION_DAYS}d "$RCLONE_REMOTE$GDRIVE_DEST_DIR" 2>/dev/null || true
+  rclone delete --min-age \${RETENTION_DAYS}d "$RCLONE_REMOTE$GDRIVE_DEST_DIR" 2>/dev/null || true
 else
   log_message "Skipping remote cleanup: remote or dest not set or dest is root."
 fi
@@ -212,6 +212,29 @@ function normalizeSchedule(input) {
 }
 
 async function main() {
+  const useDefaults = process.argv.includes("--defaults");
+  if (useDefaults) {
+    const cfg = {
+      projectDir: resolveDir(defaults.projectDir),
+      openclawDir: resolveDir(defaults.openclawDir),
+      cursorappsClawd: resolveDir(defaults.cursorappsClawd),
+      localBackupDir: resolveDir(defaults.localBackupDir),
+      gdriveRemote: defaults.gdriveRemote,
+      gdriveDest: defaults.gdriveDest,
+      retentionDays: defaults.retentionDays
+    };
+    const scriptsDir = path.join(cfg.projectDir, "scripts");
+    const scriptPath = path.join(scriptsDir, "backup_enhanced.sh");
+    writeScriptWithBackup(scriptPath, buildBackupScript(cfg));
+    fs.chmodSync(scriptPath, 0o755);
+    console.log(`Backup script written to: ${scriptPath}`);
+    if (os.platform() === "darwin") {
+      const plistPath = path.join(scriptsDir, "com.openclaw.backup.plist");
+      safeWrite(plistPath, buildLaunchdPlist(scriptPath, cfg.localBackupDir));
+      console.log(`Plist written to: ${plistPath}`);
+    }
+    return;
+  }
   console.log("ClawBackup Setup (interactive)\n");
   const projectDir = resolveDir((await ask(`Project dir [${defaults.projectDir}]: `)).trim() || defaults.projectDir);
   const openclawDir = resolveDir((await ask(`~/.openclaw dir [${defaults.openclawDir}]: `)).trim() || defaults.openclawDir);
