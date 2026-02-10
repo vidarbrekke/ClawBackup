@@ -22,8 +22,8 @@ const defaults = {
   openclawDir: path.join(home, ".openclaw"),
   cursorappsClawd: path.join(home, "Dev", "CursorApps", "clawd"),
   localBackupDir: path.join(home, "clawd", "MoltBackups", "Memory"),
-  gdriveRemote: "googleDrive:",
-  gdriveDest: "MoltBackups/Memory/",
+  rcloneRemote: "googleDrive:",
+  rcloneDest: "MoltBackups/Memory/",
   retentionDays: "7",
   schedule: os.platform() === "darwin" ? "launchd" : "cron",
   scheduleHour: "11",
@@ -77,6 +77,8 @@ function writeScriptWithBackup(scriptPath, content) {
 
 function buildBackupScript(cfg) {
   const raw = (key, fallback) => (cfg[key] != null && String(cfg[key]).trim() !== "" ? cfg[key] : fallback);
+  const rcloneRemote = raw("rcloneRemote", raw("gdriveRemote", defaults.rcloneRemote));
+  const rcloneDest = raw("rcloneDest", raw("gdriveDest", defaults.rcloneDest));
   const p = (key, fallback) => escapeBash(toPosix(raw(key, fallback) ?? ""));
   const s = (key, fallback) => escapeBash(raw(key, fallback) ?? "");
   const retention = String(raw("retentionDays", "7")).replace(/[^0-9]/g, "") || "7";
@@ -91,8 +93,8 @@ CURSORAPPS_CLAWD="${p("cursorappsClawd", defaults.cursorappsClawd)}"
 LOCAL_BACKUP_DIR="${p("localBackupDir", defaults.localBackupDir)}"
 LOG_FILE="$LOCAL_BACKUP_DIR/backup.log"
 RETENTION_DAYS=${retention}
-RCLONE_REMOTE="${s("gdriveRemote", defaults.gdriveRemote)}"
-GDRIVE_DEST_DIR="${s("gdriveDest", defaults.gdriveDest)}"
+RCLONE_REMOTE="${escapeBash(rcloneRemote)}"
+RCLONE_DEST_DIR="${escapeBash(rcloneDest)}"
 UPLOAD_MODE="${uploadMode}"
 
 need_cmd() {
@@ -224,13 +226,13 @@ fi
 if [ "$UPLOAD_MODE" = "local-only" ]; then
   log_message "Upload disabled (local-only). Skipping rclone transfer."
 else
-  log_message "Starting rclone transfer to Google Drive..."
+  log_message "Starting rclone transfer..."
   if [ -t 1 ]; then
-    rclone copy "$FULL_ARCHIVE_PATH" "$RCLONE_REMOTE$GDRIVE_DEST_DIR" --progress
+    rclone copy "$FULL_ARCHIVE_PATH" "$RCLONE_REMOTE$RCLONE_DEST_DIR" --progress
   else
-    rclone copy "$FULL_ARCHIVE_PATH" "$RCLONE_REMOTE$GDRIVE_DEST_DIR" --stats-one-line --stats 10s
+    rclone copy "$FULL_ARCHIVE_PATH" "$RCLONE_REMOTE$RCLONE_DEST_DIR" --stats-one-line --stats 10s
   fi
-  [ -f "$FULL_ARCHIVE_PATH.sha256" ] && rclone copy "$FULL_ARCHIVE_PATH.sha256" "$RCLONE_REMOTE$GDRIVE_DEST_DIR" >/dev/null 2>&1 || true
+  [ -f "$FULL_ARCHIVE_PATH.sha256" ] && rclone copy "$FULL_ARCHIVE_PATH.sha256" "$RCLONE_REMOTE$RCLONE_DEST_DIR" >/dev/null 2>&1 || true
   log_message "Backup successfully transferred to Google Drive."
 fi
 
@@ -242,8 +244,8 @@ find "$LOCAL_BACKUP_DIR" -maxdepth 1 -type f -name 'clawd_memory_backup_*.tar.gz
   log_message "Deleted old local checksum: '$old_checksum'."
 done
 log_message "Cleaning up remote backups older than $RETENTION_DAYS days..."
-if [ "$UPLOAD_MODE" = "rclone" ] && [ -n "$RCLONE_REMOTE" ] && [ -n "$GDRIVE_DEST_DIR" ] && [ "$GDRIVE_DEST_DIR" != "/" ]; then
-  rclone delete "$RCLONE_REMOTE$GDRIVE_DEST_DIR" --min-age \${RETENTION_DAYS}d --include 'clawd_memory_backup_*.tar.gz' --include 'clawd_memory_backup_*.tar.gz.sha256' 2>/dev/null || true
+if [ "$UPLOAD_MODE" = "rclone" ] && [ -n "$RCLONE_REMOTE" ] && [ -n "$RCLONE_DEST_DIR" ] && [ "$RCLONE_DEST_DIR" != "/" ]; then
+  rclone delete "$RCLONE_REMOTE$RCLONE_DEST_DIR" --min-age \${RETENTION_DAYS}d --include 'clawd_memory_backup_*.tar.gz' --include 'clawd_memory_backup_*.tar.gz.sha256' 2>/dev/null || true
 else
   log_message "Skipping remote cleanup: upload mode local-only or remote/dest invalid."
 fi
@@ -257,6 +259,7 @@ function buildLaunchdPlist(scriptPath, localBackupDir, hour, minute) {
   const logPath = escapePlist(toPosix(path.join(localBackupDir, "launchd.log")));
   const errPath = escapePlist(toPosix(path.join(localBackupDir, "launchd.err")));
   const scriptPathPosix = escapePlist(toPosix(scriptPath));
+  const launchdPath = escapePlist("/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin");
   const h = Number(hour);
   const m = Number(minute);
   return `<?xml version="1.0" encoding="UTF-8"?>
@@ -269,6 +272,11 @@ function buildLaunchdPlist(scriptPath, localBackupDir, hour, minute) {
     <array>
       <string>${scriptPathPosix}</string>
     </array>
+    <key>EnvironmentVariables</key>
+    <dict>
+      <key>PATH</key>
+      <string>${launchdPath}</string>
+    </dict>
     <key>StartCalendarInterval</key>
     <dict>
       <key>Hour</key>
@@ -318,8 +326,8 @@ async function main() {
       openclawDir: resolveDir(defaults.openclawDir),
       cursorappsClawd: resolveDir(defaults.cursorappsClawd),
       localBackupDir: resolveDir(defaults.localBackupDir),
-      gdriveRemote: defaults.gdriveRemote,
-      gdriveDest: defaults.gdriveDest,
+      rcloneRemote: defaults.rcloneRemote,
+      rcloneDest: defaults.rcloneDest,
       retentionDays: defaults.retentionDays,
       uploadMode: defaults.uploadMode
     };
@@ -346,8 +354,8 @@ async function main() {
     validatePath("~/.openclaw dir", openclawDir);
     validatePath("Dev/CursorApps/clawd dir", cursorappsClawd);
     validatePath("Local backup dir", localBackupDir);
-    const gdriveRemote = (await ask(`rclone remote [${defaults.gdriveRemote}]: `)).trim() || defaults.gdriveRemote;
-    const gdriveDest = (await ask(`GDrive dest path [${defaults.gdriveDest}]: `)).trim() || defaults.gdriveDest;
+    const rcloneRemote = (await ask(`rclone remote [${defaults.rcloneRemote}]: `)).trim() || defaults.rcloneRemote;
+    const rcloneDest = (await ask(`rclone dest path [${defaults.rcloneDest}]: `)).trim() || defaults.rcloneDest;
     const retentionDays = (await ask(`Retention days [${defaults.retentionDays}]: `)).trim() || defaults.retentionDays;
     const uploadMode = normalizeUploadMode((await ask(`Upload mode (rclone|local-only) [${defaults.uploadMode}]: `)).trim() || defaults.uploadMode);
     const scheduleInput = (await ask(`Schedule (launchd|cron|none) [${defaults.schedule}]: `)).trim() || defaults.schedule;
@@ -361,7 +369,7 @@ async function main() {
       scheduleMinute = normalizeRange(minuteInput, defaults.scheduleMinute, 0, 59, "schedule minute");
     }
 
-    const cfg = { projectDir, openclawDir, cursorappsClawd, localBackupDir, gdriveRemote, gdriveDest, retentionDays, uploadMode };
+    const cfg = { projectDir, openclawDir, cursorappsClawd, localBackupDir, rcloneRemote, rcloneDest, retentionDays, uploadMode };
     const scriptsDir = path.join(projectDir, "scripts");
     const scriptPath = path.join(scriptsDir, "backup_enhanced.sh");
     writeScriptWithBackup(scriptPath, buildBackupScript(cfg));

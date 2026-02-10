@@ -43,8 +43,8 @@ test("buildBackupScript includes core hardening and retention protections", () =
     openclawDir: "/tmp/.openclaw",
     cursorappsClawd: "/tmp/Dev/CursorApps/clawd",
     localBackupDir: "/tmp/clawd/MoltBackups/Memory",
-    gdriveRemote: "googleDrive:",
-    gdriveDest: "MoltBackups/Memory/",
+    rcloneRemote: "googleDrive:",
+    rcloneDest: "MoltBackups/Memory/",
     retentionDays: "7",
     uploadMode: "rclone"
   });
@@ -69,4 +69,10 @@ test("buildLaunchdPlist uses configured schedule time", () => {
   const plist = buildLaunchdPlist("/tmp/backup.sh", "/tmp/backups", "5", "30");
   assert.ok(plist.includes("<integer>5</integer>"));
   assert.ok(plist.includes("<integer>30</integer>"));
+});
+
+test("buildLaunchdPlist includes PATH environment variables", () => {
+  const plist = buildLaunchdPlist("/tmp/backup.sh", "/tmp/backups", "5", "30");
+  assert.ok(plist.includes("<key>EnvironmentVariables</key>"));
+  assert.ok(plist.includes("/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"));
 });
