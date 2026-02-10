@@ -1,5 +1,5 @@
 # ClawBackup
-Version: 1.0.14
+Version: 1.0.15
 
 Backs up your OpenClaw customizations (memory, config, skills, workspace) to an `rclone` destination on a schedule (Google Drive by default). Works on macOS, Linux, and Windows (via Git Bash or WSL).
 
@@ -18,22 +18,25 @@ GitHub repository: https://github.com/vidarbrekke/ClawBackup
 - **rclone** — [Download](https://rclone.org/install/) and configured for Google Drive (**only required in `rclone` upload mode**)
 - **Bash** — included on macOS/Linux; use Git Bash on Windows. **If you use WSL**, run setup inside your WSL terminal (e.g. `node setup.js` from WSL), not from Windows PowerShell, so paths are generated for Linux.
 
-## Install (choose one)
+## Install (recommended)
 
-### Option A: One command (no git required)
+### Safer path (recommended)
 
-Run this in your terminal. It downloads and runs the setup interactively:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/vidarbrekke/ClawBackup/main/setup.js | node
-```
-
-### Option B: Clone the repo
+Review the repository code before running setup:
 
 ```bash
 git clone https://github.com/vidarbrekke/ClawBackup.git
 cd ClawBackup
+# optional: checkout a tag or pinned commit before running
 node setup.js
+```
+
+### Quick path (advanced users)
+
+This downloads and executes setup immediately. Use only if you trust the source:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/vidarbrekke/ClawBackup/main/setup.js | node
 ```
 
 ## Run setup
@@ -65,10 +68,18 @@ To regenerate the backup script and plist with default paths only (no prompts), 
 ## Security notes (important)
 
 - Backups can contain sensitive data from `~/.openclaw`, project config, memory, and skills.
+- Setup and scheduling modify your local environment (LaunchAgent/cron/Task Scheduler) and create recurring jobs.
+- In `rclone` mode, cloud credentials are provided by your existing `rclone config`; no new env vars are required by this repo.
 - Prefer encrypted storage:
   - use an encrypted destination (e.g. `rclone crypt`), or
   - encrypt archives locally before offsite storage (e.g. age/gpg workflow).
 - Each backup now writes a checksum file (`.sha256`) next to the archive for integrity verification.
+
+## Disable / uninstall scheduler
+
+- **macOS:** `launchctl unload ~/Library/LaunchAgents/com.openclaw.backup.plist`
+- **Linux:** remove the backup line from `crontab -e`
+- **Windows:** remove/disable the Task Scheduler task you created
 
 ## Restore notes (skills and user data)
 
