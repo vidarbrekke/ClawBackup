@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# Auto-update VERSION on every commit.
+
+set -e
+REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+
+"$REPO_ROOT/scripts/update-version.sh" --next
+git add "$REPO_ROOT/VERSION" "$REPO_ROOT/README.md" "$REPO_ROOT/SKILL.md"

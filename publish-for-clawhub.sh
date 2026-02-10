@@ -5,6 +5,9 @@
 set -e
 REPO_ROOT="$(cd "$(dirname "$0")" && pwd)"
 OUT="$REPO_ROOT/clawhub-bundle"
+if [ -x "$REPO_ROOT/scripts/update-version.sh" ]; then
+  "$REPO_ROOT/scripts/update-version.sh"
+fi
 rm -rf "$OUT"
 mkdir -p "$OUT"
 cp "$REPO_ROOT/SKILL.md" "$REPO_ROOT/README.md" "$REPO_ROOT/setup.js" "$REPO_ROOT/install-launchagent.sh" "$OUT/"

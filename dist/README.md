@@ -1,4 +1,5 @@
 # ClawBackup
+Version: 1.0.9
 
 Backs up your OpenClaw customizations (memory, config, skills, workspace) to Google Drive on a schedule. Works on macOS, Linux, and Windows (via Git Bash or WSL).
 
@@ -82,6 +83,18 @@ based on your configured paths. In general:
 ## For maintainers / AI-assisted edits
 
 To reduce oversights when editing this repo (e.g. destructive ops, path edge cases), this repo includes a Cursor rule: [.cursor/rules/safety-destructive-ops.mdc](.cursor/rules/safety-destructive-ops.mdc). You can copy that file into your OpenClaw or clawd project’s `.cursor/rules/` so the same checks apply there.
+
+## Versioning (auto-updated on commit)
+
+This repo includes a `VERSION` file and an update script. To auto-update the
+version on every commit, enable the local git hook:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+This runs `scripts/update-version.sh --next` before each commit and updates
+`VERSION`, `README.md`, and `SKILL.md`.
 
 ## License
 
