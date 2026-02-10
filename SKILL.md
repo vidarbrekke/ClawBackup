@@ -1,5 +1,5 @@
 # Claw Backup
-Version: 1.0.9
+Version: 1.0.11
 
 Back up your OpenClaw customizations (memory, config, skills, workspace) to Google Drive on a schedule. Works on macOS, Linux, and Windows (via Git Bash or WSL).
 
@@ -8,6 +8,7 @@ Back up your OpenClaw customizations (memory, config, skills, workspace) to Goog
 - Backs up **clawd memory**, **~/.openclaw** (config, skills, modules, workspace, cron), **clawd/scripts**, and **Dev/CursorApps/clawd** (excluding `node_modules`)
 - Runs on a schedule (macOS LaunchAgent, Linux cron, or Windows Task Scheduler)
 - Applies local and remote retention so old backups are pruned
+- Supports `rclone` (cloud) or `local-only` upload mode
 
 ## Restore notes
 
@@ -20,6 +21,7 @@ on the configured paths. In general:
 ## Quick start
 
 1. **Prerequisites:** Node.js, [rclone](https://rclone.org/install/) configured for Google Drive, and Bash (or Git Bash on Windows).
+   - `rclone` is only required when upload mode is `rclone`.
 
 2. **One-command setup (no git required):**
    ```bash
@@ -33,6 +35,12 @@ on the configured paths. In general:
    ```
 
 3. Follow the prompts (or use `node setup.js --defaults` for default paths). Then run the printed test command and install the scheduler as shown.
+
+## Security notes
+
+- Backups may contain sensitive data (OpenClaw config, memory, and skills).
+- Prefer encrypted destinations (e.g. `rclone crypt`) or encrypt archives before offsite storage.
+- Archives include checksum files (`.sha256`) for integrity checks.
 
 ## Repo and contributions
 

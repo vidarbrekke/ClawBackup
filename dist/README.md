@@ -1,5 +1,5 @@
 # ClawBackup
-Version: 1.0.9
+Version: 1.0.11
 
 Backs up your OpenClaw customizations (memory, config, skills, workspace) to Google Drive on a schedule. Works on macOS, Linux, and Windows (via Git Bash or WSL).
 
@@ -13,7 +13,7 @@ Backs up your OpenClaw customizations (memory, config, skills, workspace) to Goo
 ## Prerequisites
 
 - **Node.js** — [Download](https://nodejs.org/) (for running setup)
-- **rclone** — [Download](https://rclone.org/install/) and configured for Google Drive
+- **rclone** — [Download](https://rclone.org/install/) and configured for Google Drive (**only required in `rclone` upload mode**)
 - **Bash** — included on macOS/Linux; use Git Bash on Windows. **If you use WSL**, run setup inside your WSL terminal (e.g. `node setup.js` from WSL), not from Windows PowerShell, so paths are generated for Linux.
 
 ## Install (choose one)
@@ -39,7 +39,10 @@ node setup.js
 1. Run the setup (using Option A or B above).
 2. Answer the prompts. Press Enter to accept the default in brackets. All paths use your system’s home directory and what you type — nothing is hardcoded to a specific username.
 3. The setup writes a customized `backup_enhanced.sh` into your project’s `scripts/` folder (paths are resolved to absolute so cron/launchd work from any working directory).
-4. If you chose `launchd` (macOS) or `cron` (Linux), follow the printed commands to enable scheduled backups.
+4. Choose upload mode:
+   - `rclone` (default): upload archives to your remote destination.
+   - `local-only`: keep backups locally, skip cloud transfer.
+5. If you chose `launchd` (macOS) or `cron` (Linux), follow the printed commands to enable scheduled backups. Setup now prompts for schedule hour/minute.
 
 To regenerate the backup script and plist with default paths only (no prompts), run `node setup.js --defaults`.
 
@@ -57,6 +60,14 @@ To regenerate the backup script and plist with default paths only (no prompts), 
    ```
    (Use the path the setup printed for your system.)
 
+## Security notes (important)
+
+- Backups can contain sensitive data from `~/.openclaw`, project config, memory, and skills.
+- Prefer encrypted storage:
+  - use an encrypted destination (e.g. `rclone crypt`), or
+  - encrypt archives locally before offsite storage (e.g. age/gpg workflow).
+- Each backup now writes a checksum file (`.sha256`) next to the archive for integrity verification.
+
 ## Restore notes (skills and user data)
 
 Each archive includes a `RESTORE_NOTES.txt` file with the exact restore targets
@@ -70,7 +81,7 @@ based on your configured paths. In general:
 
 ## Schedule (optional)
 
-- **macOS:** The setup generates a LaunchAgent plist. Install with the printed commands (copy to `~/Library/LaunchAgents/` and `launchctl load` — no sudo for the agent). Or run the universal installer: `./install-launchagent.sh` (it searches common locations; if your project is elsewhere, pass the plist path: `./install-launchagent.sh /path/to/com.openclaw.backup.plist`). If you had an old system-wide daemon, the installer may ask for your password once to remove it. Backups run daily at 11:00 under your user so rclone uses your config.
+- **macOS:** The setup generates a LaunchAgent plist. Install with the printed commands (copy to `~/Library/LaunchAgents/` and `launchctl load` — no sudo for the agent). Or run the universal installer: `./install-launchagent.sh` (it searches common locations; if your project is elsewhere, pass the plist path: `./install-launchagent.sh /path/to/com.openclaw.backup.plist`). If you had an old system-wide daemon, the installer may ask for your password once to remove it. Backup runs at the hour/minute configured during setup.
 - **Linux:** Add the printed cron line to `crontab -e`.
 - **Windows:** Use Task Scheduler to run the backup script daily via Git Bash or WSL.
 
