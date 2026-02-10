@@ -1,5 +1,5 @@
 # Claw Backup
-Version: 1.0.11
+Version: 1.0.12
 
 Back up your OpenClaw customizations (memory, config, skills, workspace) to Google Drive on a schedule. Works on macOS, Linux, and Windows (via Git Bash or WSL).
 

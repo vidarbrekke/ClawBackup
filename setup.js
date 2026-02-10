@@ -6,8 +6,15 @@ const os = require("os");
 const path = require("path");
 const readline = require("readline");
 
-const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-const ask = (q) => new Promise((resolve) => rl.question(q, resolve));
+let rl = null;
+const ask = (q) =>
+  new Promise((resolve, reject) => {
+    if (!rl) {
+      reject(new Error("Readline is not initialized."));
+      return;
+    }
+    rl.question(q, resolve);
+  });
 
 const home = os.homedir();
 const defaults = {
@@ -328,56 +335,77 @@ async function main() {
     }
     return;
   }
-  console.log("ClawBackup Setup (interactive)\n");
-  const projectDir = resolveDir((await ask(`Project dir [${defaults.projectDir}]: `)).trim() || defaults.projectDir);
-  const openclawDir = resolveDir((await ask(`~/.openclaw dir [${defaults.openclawDir}]: `)).trim() || defaults.openclawDir);
-  const cursorappsClawd = resolveDir((await ask(`Dev/CursorApps/clawd dir [${defaults.cursorappsClawd}]: `)).trim() || defaults.cursorappsClawd);
-  const localBackupDir = resolveDir((await ask(`Local backup dir [${defaults.localBackupDir}]: `)).trim() || defaults.localBackupDir);
-  validatePath("Project dir", projectDir);
-  validatePath("~/.openclaw dir", openclawDir);
-  validatePath("Dev/CursorApps/clawd dir", cursorappsClawd);
-  validatePath("Local backup dir", localBackupDir);
-  const gdriveRemote = (await ask(`rclone remote [${defaults.gdriveRemote}]: `)).trim() || defaults.gdriveRemote;
-  const gdriveDest = (await ask(`GDrive dest path [${defaults.gdriveDest}]: `)).trim() || defaults.gdriveDest;
-  const retentionDays = (await ask(`Retention days [${defaults.retentionDays}]: `)).trim() || defaults.retentionDays;
-  const uploadMode = normalizeUploadMode((await ask(`Upload mode (rclone|local-only) [${defaults.uploadMode}]: `)).trim() || defaults.uploadMode);
-  const scheduleInput = (await ask(`Schedule (launchd|cron|none) [${defaults.schedule}]: `)).trim() || defaults.schedule;
-  const schedule = normalizeSchedule(scheduleInput);
-  let scheduleHour = defaults.scheduleHour;
-  let scheduleMinute = defaults.scheduleMinute;
-  if (schedule !== "none") {
-    const hourInput = (await ask(`Schedule hour 0-23 [${defaults.scheduleHour}]: `)).trim() || defaults.scheduleHour;
-    const minuteInput = (await ask(`Schedule minute 0-59 [${defaults.scheduleMinute}]: `)).trim() || defaults.scheduleMinute;
-    scheduleHour = normalizeRange(hourInput, defaults.scheduleHour, 0, 23, "schedule hour");
-    scheduleMinute = normalizeRange(minuteInput, defaults.scheduleMinute, 0, 59, "schedule minute");
+  rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  try {
+    console.log("ClawBackup Setup (interactive)\n");
+    const projectDir = resolveDir((await ask(`Project dir [${defaults.projectDir}]: `)).trim() || defaults.projectDir);
+    const openclawDir = resolveDir((await ask(`~/.openclaw dir [${defaults.openclawDir}]: `)).trim() || defaults.openclawDir);
+    const cursorappsClawd = resolveDir((await ask(`Dev/CursorApps/clawd dir [${defaults.cursorappsClawd}]: `)).trim() || defaults.cursorappsClawd);
+    const localBackupDir = resolveDir((await ask(`Local backup dir [${defaults.localBackupDir}]: `)).trim() || defaults.localBackupDir);
+    validatePath("Project dir", projectDir);
+    validatePath("~/.openclaw dir", openclawDir);
+    validatePath("Dev/CursorApps/clawd dir", cursorappsClawd);
+    validatePath("Local backup dir", localBackupDir);
+    const gdriveRemote = (await ask(`rclone remote [${defaults.gdriveRemote}]: `)).trim() || defaults.gdriveRemote;
+    const gdriveDest = (await ask(`GDrive dest path [${defaults.gdriveDest}]: `)).trim() || defaults.gdriveDest;
+    const retentionDays = (await ask(`Retention days [${defaults.retentionDays}]: `)).trim() || defaults.retentionDays;
+    const uploadMode = normalizeUploadMode((await ask(`Upload mode (rclone|local-only) [${defaults.uploadMode}]: `)).trim() || defaults.uploadMode);
+    const scheduleInput = (await ask(`Schedule (launchd|cron|none) [${defaults.schedule}]: `)).trim() || defaults.schedule;
+    const schedule = normalizeSchedule(scheduleInput);
+    let scheduleHour = defaults.scheduleHour;
+    let scheduleMinute = defaults.scheduleMinute;
+    if (schedule !== "none") {
+      const hourInput = (await ask(`Schedule hour 0-23 [${defaults.scheduleHour}]: `)).trim() || defaults.scheduleHour;
+      const minuteInput = (await ask(`Schedule minute 0-59 [${defaults.scheduleMinute}]: `)).trim() || defaults.scheduleMinute;
+      scheduleHour = normalizeRange(hourInput, defaults.scheduleHour, 0, 23, "schedule hour");
+      scheduleMinute = normalizeRange(minuteInput, defaults.scheduleMinute, 0, 59, "schedule minute");
+    }
+
+    const cfg = { projectDir, openclawDir, cursorappsClawd, localBackupDir, gdriveRemote, gdriveDest, retentionDays, uploadMode };
+    const scriptsDir = path.join(projectDir, "scripts");
+    const scriptPath = path.join(scriptsDir, "backup_enhanced.sh");
+    writeScriptWithBackup(scriptPath, buildBackupScript(cfg));
+    fs.chmodSync(scriptPath, 0o755);
+    console.log(`\nBackup script written to: ${scriptPath}`);
+
+    if (schedule === "launchd" && os.platform() === "darwin") {
+      const plistPath = path.join(scriptsDir, "com.openclaw.backup.plist");
+      const launchAgentsDir = path.join(home, "Library", "LaunchAgents");
+      safeWrite(plistPath, buildLaunchdPlist(scriptPath, localBackupDir, scheduleHour, scheduleMinute));
+      console.log(`Launchd plist written to: ${plistPath}`);
+      console.log(`\nInstall the scheduler (run as your user, do not use sudo):`);
+      console.log(`  mkdir -p "${launchAgentsDir}"`);
+      console.log(`  cp "${plistPath}" "${path.join(launchAgentsDir, "com.openclaw.backup.plist")}"`);
+      console.log(`  launchctl load "${path.join(launchAgentsDir, "com.openclaw.backup.plist")}"`);
+    } else if (schedule === "cron") {
+      console.log(`\nAdd this line to crontab (crontab -e):`);
+      console.log(`  ${scheduleMinute} ${scheduleHour} * * * ${scriptPath}`);
+    } else {
+      console.log("\nScheduler not configured. Run the backup script manually or set up cron/launchd.");
+    }
+
+    console.log("\nNext steps:");
+    console.log("  1. Ensure rclone is configured: rclone config");
+    console.log(`  2. Test run: ${scriptPath}`);
+  } finally {
+    rl.close();
+    rl = null;
   }
-
-  const cfg = { projectDir, openclawDir, cursorappsClawd, localBackupDir, gdriveRemote, gdriveDest, retentionDays, uploadMode };
-  const scriptsDir = path.join(projectDir, "scripts");
-  const scriptPath = path.join(scriptsDir, "backup_enhanced.sh");
-  writeScriptWithBackup(scriptPath, buildBackupScript(cfg));
-  fs.chmodSync(scriptPath, 0o755);
-  console.log(`\nBackup script written to: ${scriptPath}`);
-
-  if (schedule === "launchd" && os.platform() === "darwin") {
-    const plistPath = path.join(scriptsDir, "com.openclaw.backup.plist");
-    const launchAgentsDir = path.join(home, "Library", "LaunchAgents");
-    safeWrite(plistPath, buildLaunchdPlist(scriptPath, localBackupDir, scheduleHour, scheduleMinute));
-    console.log(`Launchd plist written to: ${plistPath}`);
-    console.log(`\nInstall the scheduler (run as your user, do not use sudo):`);
-    console.log(`  mkdir -p "${launchAgentsDir}"`);
-    console.log(`  cp "${plistPath}" "${path.join(launchAgentsDir, "com.openclaw.backup.plist")}"`);
-    console.log(`  launchctl load "${path.join(launchAgentsDir, "com.openclaw.backup.plist")}"`);
-  } else if (schedule === "cron") {
-    console.log(`\nAdd this line to crontab (crontab -e):`);
-    console.log(`  ${scheduleMinute} ${scheduleHour} * * * ${scriptPath}`);
-  } else {
-    console.log("\nScheduler not configured. Run the backup script manually or set up cron/launchd.");
-  }
-
-  console.log("\nNext steps:");
-  console.log("  1. Ensure rclone is configured: rclone config");
-  console.log(`  2. Test run: ${scriptPath}`);
 }
 
-main().catch((err) => { console.error(err); process.exit(1); }).finally(() => rl.close());
+if (require.main === module) {
+  main().catch((err) => { console.error(err); process.exit(1); });
+}
+
+module.exports = {
+  defaults,
+  resolveDir,
+  toPosix,
+  escapeBash,
+  escapePlist,
+  normalizeSchedule,
+  normalizeRange,
+  normalizeUploadMode,
+  buildBackupScript,
+  buildLaunchdPlist
+};

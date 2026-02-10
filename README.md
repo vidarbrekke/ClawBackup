@@ -1,7 +1,9 @@
 # ClawBackup
-Version: 1.0.11
+Version: 1.0.12
 
 Backs up your OpenClaw customizations (memory, config, skills, workspace) to Google Drive on a schedule. Works on macOS, Linux, and Windows (via Git Bash or WSL).
+
+GitHub repository: https://github.com/vidarbrekke/ClawBackup
 
 ## What gets backed up
 
@@ -90,6 +92,16 @@ based on your configured paths. In general:
 - **Backup fails or rclone “remote not found”:** Run `rclone config` and ensure the remote name matches what you entered at setup (e.g. `googleDrive`). On macOS, use the LaunchAgent (not LaunchDaemon) so the job runs as your user and sees `~/.config/rclone`.
 - **Paths wrong after moving home/project:** Run `node setup.js` again with the new paths, then reinstall the scheduler (e.g. `./install-launchagent.sh` on macOS).
 - **Check logs:** Local backup log: `$LOCAL_BACKUP_DIR/backup.log`; launchd stdout/stderr: `$LOCAL_BACKUP_DIR/launchd.log` and `launchd.err` (paths from your setup).
+
+## Test suite
+
+Critical behavior tests are included for setup/runtime generation logic.
+
+Run:
+
+```bash
+node --test tests/*.test.js
+```
 
 ## For maintainers / AI-assisted edits
 
