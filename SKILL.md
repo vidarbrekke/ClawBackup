@@ -1,5 +1,5 @@
 # Claw Backup
-Version: 1.0.13
+Version: 1.0.14
 
 Back up your OpenClaw customizations (memory, config, skills, workspace) to an `rclone` destination on a schedule (Google Drive by default). Works on macOS, Linux, and Windows (via Git Bash or WSL).
 

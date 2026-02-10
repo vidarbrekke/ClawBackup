@@ -1,5 +1,5 @@
 # ClawBackup
-Version: 1.0.13
+Version: 1.0.14
 
 Backs up your OpenClaw customizations (memory, config, skills, workspace) to an `rclone` destination on a schedule (Google Drive by default). Works on macOS, Linux, and Windows (via Git Bash or WSL).
 
@@ -95,7 +95,22 @@ based on your configured paths. In general:
 
 ## Roadmap
 
+### Now
+
 - Add workspace include modes (`full|minimal|off`) so users can tune backup size and sensitivity for `~/.openclaw/workspace*`.
+
+### Next
+
+- Add optional remote verification mode (presence/size/checksum validation after upload).
+- Add stricter remote retention safety checks (safe destination prefix by default, explicit override when needed).
+- Enrich `manifest.json` with ClawBackup git commit hash and top-level staged sections.
+- Add launchd polish options (`RunAtLoad`, `WorkingDirectory`) while keeping current defaults stable.
+- Add destination examples/presets in setup/docs for common `rclone` remotes (Dropbox, OneDrive, Box, S3).
+
+### Later
+
+- Add a `restore.sh` helper (dry-run by default) to make restores safer and easier.
+- Introduce a storage-provider abstraction (keep `rclone` as default, allow provider-skill adapters later).
 
 ## Test suite
 
